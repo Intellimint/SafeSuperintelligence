@@ -1,19 +1,13 @@
 from flask import Flask, request, jsonify
 import joblib
 import numpy as np
-import logging
 from model import predict
 from scraper import scrape_webpage
-from q_learning import QLearningAgent
+from data_ingestion import fetch_and_update_data
 
 app = Flask(__name__)
 
 conversation_history = []
-feedback_history = []
-agent = QLearningAgent()
-
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)
 
 @app.route('/predict', methods=['POST'])
 def predict_route():
@@ -60,6 +54,8 @@ def process_conversation(user_input, conversation_history):
     
     return response, reflection
 
+feedback_history = []
+
 @app.route('/feedback', methods=['POST'])
 def feedback_route():
     global feedback_history
@@ -73,25 +69,24 @@ def feedback_route():
     return jsonify({'status': 'Feedback received'})
 
 def process_feedback(response, feedback):
-    try:
-        state = response
-        action = feedback
-        reward = 1 if "great" in feedback.lower() else -1
+    # Implement logic to use feedback for improving AI's responses
+    # For now, we'll just print the feedback
+    print(f"Received feedback: {feedback} for response: {response}")
+    
+    # Example: Adjust AI's behavior based on feedback
+    if "great" in feedback.lower():
+        print("Positive feedback received. Reinforcing current behavior.")
+    elif "bad" in feedback.lower():
+        print("Negative feedback received. Adjusting behavior.")
 
-        # Update Q-table
-        agent.update_q_value(state, action, reward, state, [action])
-
-        # Save the Q-table after each update
-        agent.save_q_table()
-
-        # Log feedback
-        logging.debug(f"Received feedback: {feedback} for response: {response}")
-        if reward == 1:
-            logging.debug("Positive feedback received. Reinforcing current behavior.")
-        else:
-            logging.debug("Negative feedback received. Adjusting behavior.")
-    except Exception as e:
-        logging.error(f"Error processing feedback: {e}")
+@app.route('/update-dataset', methods=['POST'])
+def update_dataset_route():
+    data = request.json
+    urls = data.get('urls', [])
+    if urls:
+        fetch_and_update_data(urls)
+        return jsonify({'status': 'Dataset updated'})
+    return jsonify({'status': 'No URLs provided'})
 
 if __name__ == '__main__':
     app.run(port=5000)
