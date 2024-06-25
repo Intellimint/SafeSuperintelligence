@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import joblib
 import numpy as np
 from model import predict
+from scraper import scrape_webpage
 from data_ingestion import fetch_and_update_data
 from modules.prefrontal_cortex import PrefrontalCortex
 from modules.visual_cortex import VisualCortex
@@ -19,7 +20,7 @@ auditory_cortex = AuditoryCortex()
 hippocampus = Hippocampus()
 
 # Initialize training pair generator
-llama3_interface = Llama3Interface(api_key='your_llama3_api_key')
+llama3_interface = Llama3Interface()
 
 # Initialize web scraping engine
 curiosity_scraper = CuriosityScraper()
@@ -120,24 +121,40 @@ def make_decision():
 
 @app.route('/store_memory', methods=['POST'])
 def store_memory():
-    data = request.json['data']
-    memory_id = hippocampus.store_memory(data)
-    prefrontal_cortex.update_knowledge_base(f"memory_{memory_id}", data)
+    data = request.json
+    content = data.get('content')
+    tags = data.get('tags', [])
+    source = data.get('source')
+    event = data.get('event')
+    memory_id = hippocampus.store_memory(content, tags, source, event)
+    prefrontal_cortex.update_knowledge_base(f"memory_{memory_id}", content)
     return jsonify({'status': 'Memory stored', 'memory_id': memory_id})
 
 @app.route('/recall_memory', methods=['POST'])
 def recall_memory():
-    query = request.json['query']
-    memory = hippocampus.recall_memory(query)
-    prefrontal_cortex.integrate_memory(memory)
-    return jsonify({'memory': memory})
+    query = request.json.get('query')
+    tags = request.json.get('tags', [])
+    start_time = request.json.get('start_time')
+    end_time = request.json.get('end_time')
+    source = request.json.get('source')
+    limit = request.json.get('limit', 5)
+    memories = hippocampus.recall_memory(query, limit, tags, start_time, end_time, source)
+    prefrontal_cortex.integrate_memory(memories)
+    return jsonify({'memories': [memory.content for memory in memories]})
 
 @app.route('/generate_training_pairs', methods=['POST'])
 def generate_training_pairs():
-    prompt = request.json['prompt']
+    prompt = request.json.get('prompt')
     pairs = llama3_interface.generate_pairs(prompt)
+    
+    if not isinstance(pairs, list):
+        return jsonify({'error': 'Invalid response from Llama3Interface'}), 500
+    
     for pair in pairs:
+        if not isinstance(pair, dict) or 'question' not in pair or 'answer' not in pair:
+            return jsonify({'error': 'Invalid training pair structure'}), 500
         prefrontal_cortex.update_knowledge_base(pair['question'], pair['answer'])
+    
     return jsonify({'pairs': pairs})
 
 @app.route('/get-knowledge', methods=['GET'])
@@ -185,4 +202,4 @@ def load_state_route():
     return jsonify({'status': 'State loaded'})
 
 if __name__ == '__main__':
-    app.run(port=5000)
+    app.run(port=5000, debug=True)
