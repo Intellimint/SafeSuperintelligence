@@ -22,7 +22,7 @@ class Memory:
         self.event = event
 
 class Hippocampus:
-    def __init__(self, capacity: int = 1000, num_clusters: int = 10):
+    def __init__(self, capacity: int = 1000, num_clusters: int = 3):
         self.memories: Dict[str, Memory] = {}
         self.tag_index: Dict[str, List[str]] = defaultdict(list)
         self.capacity = capacity
@@ -32,21 +32,6 @@ class Hippocampus:
         self.memory_clusters = None
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
-
-        # Add initial training data
-        self._initialize_training_data()
-
-    def _initialize_training_data(self):
-        initial_memories = [
-            ("Artificial Intelligence is the simulation of human intelligence processes by machines, especially computer systems.", ["AI", "Technology"]),
-            ("Machine Learning is a subset of AI that involves the use of algorithms and statistical models to perform specific tasks.", ["Machine Learning", "AI"]),
-            ("Deep Learning is a subset of Machine Learning that uses neural networks with many layers.", ["Deep Learning", "Machine Learning"]),
-            ("Natural Language Processing is a field of AI that focuses on the interaction between computers and humans through natural language.", ["NLP", "AI"]),
-            ("A neural network is a series of algorithms that attempts to recognize underlying relationships in a set of data through a process that mimics the way the human brain operates.", ["Neural Network", "AI"])
-        ]
-
-        for content, tags in initial_memories:
-            self.store_memory(content, tags)
 
     def store_memory(self, content: str, tags: List[str] = None, source: str = None, event: str = None) -> str:
         try:
@@ -118,7 +103,7 @@ class Hippocampus:
         if self.content_vectors is not None and self.content_vectors.shape[0] >= self.kmeans.n_clusters:
             self.memory_clusters = self.kmeans.fit_predict(self.content_vectors)
         else:
-            self.memory_clusters = None
+            self.memory_clusters = np.zeros(len(self.memories))
 
     def _update_memory_importance(self, memory_id: str):
         memory = self.memories[memory_id]
@@ -144,7 +129,8 @@ class Hippocampus:
                 'tag_index': self.tag_index,
                 'capacity': self.capacity,
                 'tfidf_vectorizer': self.tfidf_vectorizer,
-                'kmeans': self.kmeans
+                'kmeans': self.kmeans,
+                'memory_clusters': self.memory_clusters
             }
             joblib.dump(state, filename)
             self.logger.info(f"State saved to {filename}")
@@ -161,7 +147,8 @@ class Hippocampus:
             self.tag_index = state['tag_index']
             self.capacity = state['capacity']
             self.tfidf_vectorizer = state['tfidf_vectorizer']
-            self.kmeans = state.get('kmeans', KMeans(n_clusters=10))
+            self.kmeans = state['kmeans']
+            self.memory_clusters = state.get('memory_clusters', None)
             self._update_tfidf_vectors()
             self._update_clusters()
             self.logger.info(f"State loaded from {filename}")
@@ -221,7 +208,7 @@ class Hippocampus:
         if self.memory_clusters is None:
             self._update_clusters()
         
-        if self.memory_clusters is None:
+        if self.memory_clusters is None or cluster_id >= len(np.unique(self.memory_clusters)):
             return "No clusters available."
         
         cluster_memories = [memory for memory, cluster in zip(self.memories.values(), self.memory_clusters) if cluster == cluster_id]

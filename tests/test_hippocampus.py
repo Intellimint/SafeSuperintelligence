@@ -54,7 +54,8 @@ class TestHippocampus(unittest.TestCase):
             'tag_index': {'test': ['id1']},
             'capacity': 3,
             'tfidf_vectorizer': TfidfVectorizer(),
-            'kmeans': KMeans(n_clusters=10)
+            'kmeans': KMeans(n_clusters=10),
+            'memory_clusters': np.array([0, 1, 2])
         }
         self.hippocampus.load_state("test_state.pkl")
         self.assertIn('id1', self.hippocampus.memories)

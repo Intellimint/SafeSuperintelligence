@@ -1,20 +1,24 @@
-# web_scraping_engine/curiosity_scraper.py
 import requests
 from bs4 import BeautifulSoup
 
 class CuriosityScraper:
     def __init__(self):
-        self.visited_urls = set()
+        pass
 
-    def scrape(self, url):
-        if url in self.visited_urls:
-            return
-        self.visited_urls.add(url)
-        
-        response = requests.get(url)
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.content, 'html.parser')
-            # Placeholder for extracting and processing content
-            return soup.text
-        else:
-            return None
+    def scrape_webpage(self, url):
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+            content = soup.get_text(separator='\n')
+            return content
+        except requests.exceptions.RequestException as e:
+            print(f"Error scraping {url}: {e}")
+            return ""
+
+    def fetch_and_update_data(self, urls):
+        data = {}
+        for url in urls:
+            content = self.scrape_webpage(url)
+            data[url] = content
+        return data

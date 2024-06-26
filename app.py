@@ -1,12 +1,6 @@
 from flask import Flask, request, jsonify
-import joblib
 import numpy as np
-from model import predict
-from scraper import scrape_webpage
-from data_ingestion import fetch_and_update_data
 from modules.prefrontal_cortex import PrefrontalCortex
-from modules.visual_cortex import VisualCortex
-from modules.auditory_cortex import AuditoryCortex
 from modules.hippocampus import Hippocampus
 from training_pair_generator.llama3_interface import Llama3Interface
 from web_scraping_engine.curiosity_scraper import CuriosityScraper
@@ -15,8 +9,6 @@ app = Flask(__name__)
 
 # Initialize brain modules
 prefrontal_cortex = PrefrontalCortex()
-visual_cortex = VisualCortex()
-auditory_cortex = AuditoryCortex()
 hippocampus = Hippocampus()
 
 # Initialize training pair generator
@@ -31,9 +23,9 @@ feedback_history = []
 @app.route('/predict', methods=['POST'])
 def predict_route():
     data = request.json
-    input_data = np.array(data['input']).reshape(1, -1)
-    prediction = predict(input_data)
-    return jsonify({'prediction': prediction.tolist()})
+    input_data = {'input': data['input']}  # Wrap the input list in a dictionary
+    prediction = prefrontal_cortex.make_decision(input_data)
+    return jsonify({'decision': prediction})
 
 @app.route('/scrape', methods=['POST'])
 def scrape_route():
@@ -77,23 +69,20 @@ def feedback_route():
     response = request.json['response']
     feedback_history.append({'response': response, 'feedback': feedback})
     
-    process_feedback(response, feedback)
-    
-    return jsonify({'status': 'Feedback received and processed'})
-
-def process_feedback(response, feedback):
     prefrontal_cortex.process_feedback(response, feedback)
     if "great" in feedback.lower():
         prefrontal_cortex.reinforce_behavior(response)
     elif "bad" in feedback.lower():
         prefrontal_cortex.adjust_behavior(response)
+    
+    return jsonify({'status': 'Feedback received and processed'})
 
 @app.route('/update-dataset', methods=['POST'])
 def update_dataset_route():
     data = request.json
     urls = data.get('urls', [])
     if urls:
-        new_data = fetch_and_update_data(urls)
+        new_data = curiosity_scraper.fetch_and_update_data(urls)
         for url, content in new_data.items():
             prefrontal_cortex.update_knowledge_base(url, content)
         return jsonify({'status': 'Dataset updated'})
@@ -121,40 +110,24 @@ def make_decision():
 
 @app.route('/store_memory', methods=['POST'])
 def store_memory():
-    data = request.json
-    content = data.get('content')
-    tags = data.get('tags', [])
-    source = data.get('source')
-    event = data.get('event')
-    memory_id = hippocampus.store_memory(content, tags, source, event)
-    prefrontal_cortex.update_knowledge_base(f"memory_{memory_id}", content)
+    data = request.json['data']
+    memory_id = hippocampus.store_memory(data)
+    prefrontal_cortex.update_knowledge_base(f"memory_{memory_id}", data)
     return jsonify({'status': 'Memory stored', 'memory_id': memory_id})
 
 @app.route('/recall_memory', methods=['POST'])
 def recall_memory():
-    query = request.json.get('query')
-    tags = request.json.get('tags', [])
-    start_time = request.json.get('start_time')
-    end_time = request.json.get('end_time')
-    source = request.json.get('source')
-    limit = request.json.get('limit', 5)
-    memories = hippocampus.recall_memory(query, limit, tags, start_time, end_time, source)
-    prefrontal_cortex.integrate_memory(memories)
-    return jsonify({'memories': [memory.content for memory in memories]})
+    query = request.json['query']
+    memory = hippocampus.recall_memory(query)
+    prefrontal_cortex.integrate_memory(memory)
+    return jsonify({'memory': memory})
 
 @app.route('/generate_training_pairs', methods=['POST'])
 def generate_training_pairs():
-    prompt = request.json.get('prompt')
+    prompt = request.json['prompt']
     pairs = llama3_interface.generate_pairs(prompt)
-    
-    if not isinstance(pairs, list):
-        return jsonify({'error': 'Invalid response from Llama3Interface'}), 500
-    
     for pair in pairs:
-        if not isinstance(pair, dict) or 'question' not in pair or 'answer' not in pair:
-            return jsonify({'error': 'Invalid training pair structure'}), 500
         prefrontal_cortex.update_knowledge_base(pair['question'], pair['answer'])
-    
     return jsonify({'pairs': pairs})
 
 @app.route('/get-knowledge', methods=['GET'])
@@ -202,4 +175,4 @@ def load_state_route():
     return jsonify({'status': 'State loaded'})
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+    app.run(port=5000)
